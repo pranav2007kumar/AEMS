@@ -3,11 +3,9 @@ import path from 'node:path';
 const assets={};
 function collect(dir,prefix=''){for(const name of fs.readdirSync(dir)){if(name==='server'||name==='.openai')continue;const full=path.join(dir,name),url=prefix+'/'+name;if(fs.statSync(full).isDirectory())collect(full,url);else assets[url]=fs.readFileSync(full).toString('base64');}}
 collect('dist');
-// Keep the local key-entry flow; hosted credentials are managed by Sites secrets.
+// Hosted credentials stay in Sites server secrets; relabel the shared store.
 let head=Buffer.from(assets['/security-head.js'],'base64').toString();
-head=head.replace(/<form id="head-mistral-config">[\s\S]*?<\/form>/,'<p class="hint">Groq is connected through a server secret. Use Test AI live to verify the connection.</p>');
-head=head.replace(/<p class="hint">Free Ollama API on this computer\.[\s\S]*?<\/p>/,'');
-head=head.replace('Groq / Mistral online API + local backup','Groq online AI').replaceAll('Shared localhost records','Shared online records').replaceAll('through local SQLite','through the hosted database');
+head=head.replaceAll('Shared localhost records','Shared online records').replaceAll('through local SQLite','through the hosted database');
 assets['/security-head.js']=Buffer.from(head).toString('base64');
 assets['/shared-state.js']=Buffer.from(Buffer.from(assets['/shared-state.js'],'base64').toString().replaceAll('SQLite revision','Shared revision')).toString('base64');
 const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.json':'application/json','.css':'text/css; charset=utf-8','.txt':'text/plain; charset=utf-8'};

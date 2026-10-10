@@ -1,13 +1,13 @@
 """Local-only static preview and optional Ollama structured-output adapter."""
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-import json, re, urllib.request, urllib.error, time, threading
+import json, re, urllib.request, urllib.error, time, threading, os
 import state_store
 
 ROOT = Path(__file__).resolve().parent / 'dist'
 OLLAMA = 'http://127.0.0.1:11434'
-MISTRAL_KEY = ''  # Memory only: never saved or returned to the browser.
-GROQ_KEY = ''
+MISTRAL_KEY = os.environ.get('MISTRAL_API_KEY', '')  # Server configuration only.
+GROQ_KEY = os.environ.get('GROQ_API_KEY', '')
 MISTRAL_LOCK = threading.Lock()
 
 def mistral_generate(model, prompt, schema):
