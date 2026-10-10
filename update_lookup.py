@@ -1,0 +1,54 @@
+from pathlib import Path
+p = Path('D:/Hackathons/Genesis/amrita-entry/dist/app.js')
+s = p.read_text(encoding='utf-8')
+s = s.replace("const key='amrita-visits-v1'", """// Sample directory only. Replace with an authenticated university lookup later.
+const studentDirectory=[
+ {studentId:'CB.CSE.DEMO01',student:'Arjun Kumar',branch:'Computer Science',hostel:'Anugraha',warden:'Dr. R. Menon'},
+ {studentId:'CB.ECE.DEMO02',student:'Meera Nair',branch:'Electronics & Communication',hostel:'Amritamayi',warden:'Dr. S. Devi'},
+ {studentId:'CB.AI.DEMO03',student:'Kavya Raman',branch:'Artificial Intelligence',hostel:'Amritamayi',warden:'Dr. S. Devi'}
+];
+const findStudent=id=>studentDirectory.find(s=>s.studentId===String(id).trim().toUpperCase());
+const key='amrita-visits-v1'""")
+start=s.index('<label class="field">Student / university ID *')
+end=s.index('<label class="field">Visit date *',start)
+s=s[:start]+'''<label class="field full">Student / university ID *<input name="studentId" required autocomplete="off" maxlength="40" placeholder="e.g. CB.CSE.DEMO01" aria-describedby="student-lookup-status"><span id="student-lookup-status" class="hint" role="status">Enter an ID to find the student and assigned warden.</span><div class="sample-ids"><span>Try a sample:</span>${studentDirectory.map(s=>`<button type="button" class="sample-id" data-student-id="${s.studentId}">${s.studentId}</button>`).join('')}</div></label><label class="field">Student name<input name="student" readonly placeholder="Filled from student directory"></label><label class="field">Branch / department<input name="branch" readonly placeholder="Filled from student directory"></label><label class="field">Assigned hostel<input name="hostel" readonly placeholder="Filled from student directory"></label><label class="field">Assigned warden<input name="warden" readonly placeholder="Filled from student directory"></label>'''+s[end:]
+s=s.replace('<button class="btn" type="submit">Submit visit request →</button>','<button class="btn" id="submit-visit" type="submit" disabled>Submit visit request →</button>')
+s=s.replace('Warden names and hostel mappings in this prototype are sample data.','Sample student directory: these names, hostel assignments, and wardens are for demonstration. Enter the university ID as text; uploading an ID-card image is not required.')
+start=s.index("document.querySelector('#visit-form').onsubmit=")
+end=s.index("document.querySelector('#track-form').onsubmit=",start)
+s=s[:start]+'''const form=document.querySelector('#visit-form');
+function lookupStudent(){
+ const record=findStudent(form.elements.studentId.value);
+ for(const field of ['student','branch','hostel','warden'])form.elements[field].value=record?record[field]:'';
+ document.querySelector('#submit-visit').disabled=!record;
+ const status=document.querySelector('#student-lookup-status');
+ status.textContent=record?'Student found. Hostel and warden assigned from the sample directory.':form.elements.studentId.value.trim()?'Student ID not found. Check the ID or try one of the sample records.':'Enter an ID to find the student and assigned warden.';
+ status.classList.toggle('lookup-success',!!record);
+}
+form.elements.studentId.oninput=lookupStudent;
+document.querySelectorAll('[data-student-id]').forEach(b=>b.onclick=()=>{form.elements.studentId.value=b.dataset.studentId;lookupStudent()});
+form.onsubmit=e=>{e.preventDefault();const d=Object.fromEntries(new FormData(form));const record=findStudent(d.studentId);if(!record){lookupStudent();toast('Select a valid student ID first.');return}if(d.date<today()){toast('Choose today or a future visit date.');return}const v={...d,...record,plate:plate(d.plate),id:'AMV-'+crypto.randomUUID().slice(0,8).toUpperCase(),status:'pending',created:new Date().toISOString()};visits.unshift(v);audit('Request submitted',v,{actor:'Visitor'});form.reset();lookupStudent();document.querySelector('#track-id').value=v.id;showTracking(v.id);toast('Request submitted. Save your request ID: '+v.id)};
+'''+s[end:]
+start=s.index('function showTracking(id)')
+end=s.index('function stats()',start)
+s=s[:start]+'''function showTracking(id){const v=visits.find(v=>v.id===id);document.querySelector('#track-result').innerHTML=v?`<div class="visit-card"><strong>${esc(v.id)}</strong><p>${esc(v.visitor)} · ${esc(v.plate)}<br>Visiting ${esc(v.student)}<br>${esc(v.date)} · ${esc(v.warden)}<br>Hostel: ${esc(v.hostel)}</p>${badge(v)}<p>Entry: ${stamp(v.entered)}<br>Exit: ${stamp(v.exited)}</p>${['approved','inside','exit'].includes(effective(v))?`<button type="button" class="btn secondary" id="hostel-directions">Directions to ${esc(v.hostel)} →</button>`:'<p class="hint">Hostel directions become available after entry approval.</p>'}</div>`:'<p class="hint">No request found. Check the request ID.</p>';const button=document.querySelector('#hostel-directions');if(button)button.onclick=()=>{location.hash='#directions/'+encodeURIComponent(v.id)}}
+
+const routeSteps={
+ Anugraha:[['Main gate','Start at the entry checkpoint after security confirms your entry.'],['Campus avenue','Follow the highlighted campus road to the sample central junction.'],['Hostel approach','Take the left branch toward the sample Anugraha entrance.'],['Anugraha reception','Report at reception and follow the warden’s instructions.']],
+ Amritamayi:[['Main gate','Start at the entry checkpoint after security confirms your entry.'],['Campus avenue','Follow the highlighted campus road to the sample central junction.'],['Hostel approach','Take the right branch toward the sample Amritamayi entrance.'],['Amritamayi reception','Report at reception and follow the warden’s instructions.']]
+};
+function directions(id){
+ const v=visits.find(x=>x.id===id);
+ if(!v||!['approved','inside','exit'].includes(effective(v))){app.innerHTML=heading('PLAN YOUR CAMPUS VISIT','Hostel <span>directions</span>','Track an approved request to see directions.')+'<section class="panel"><p>Directions are available for an approved, active visit.</p><a class="btn" href="#visitor">Track your request</a></section>';return}
+ const steps=routeSteps[v.hostel];
+ if(!steps){app.innerHTML=heading('YOUR CAMPUS VISIT','Hostel <span>directions</span>','')+'<section class="panel">No route is available for this hostel. Ask security for directions.</section>';return}
+ const left=v.hostel==='Anugraha';
+ const destination=left?'180,120':'540,120';
+ app.innerHTML=heading('FIND YOUR HOSTEL','Your route to <span>'+esc(v.hostel)+'</span>','From the main gate to your assigned hostel reception.')+`<div class="route-summary"><span class="status approved">${esc(labels[effective(v)])}</span><strong>${esc(v.student)} · ${esc(v.hostel)}</strong><span>Warden: ${esc(v.warden)}</span></div><div class="route-warning">Sample map for demonstration · This is not the actual campus layout. Ask security for the real route.</div><div class="route-layout"><section class="panel route-map-panel"><div class="section-label" style="margin-top:0"><h2>Gate → hostel reception</h2><span>Schematic map</span></div><svg id="hostel-map" viewBox="0 0 720 440" role="img" aria-label="Sample route from main gate through campus avenue to ${esc(v.hostel)}. Not an actual campus map."><defs><pattern id="map-grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#e3ebe7" stroke-width="1"/></pattern></defs><rect width="720" height="440" rx="14" fill="#f1f7f3"/><rect width="720" height="440" fill="url(#map-grid)"/><path d="M360 385V235M180 120V235H540V120" fill="none" stroke="#fff" stroke-width="36" stroke-linejoin="round"/><path d="M360 385V235H${left?'180':'540'}V120" fill="none" stroke="#bb0750" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="15 10"/><g fill="#d8e5dd" stroke="#adc6b6"><rect x="110" y="48" width="140" height="60" rx="6"/><rect x="470" y="48" width="140" height="60" rx="6"/><rect x="80" y="295" width="170" height="65" rx="6"/><rect x="480" y="295" width="160" height="65" rx="6"/></g><g fill="#34473c" font-family="Arial,sans-serif" font-size="16" text-anchor="middle"><text x="180" y="84">Anugraha</text><text x="540" y="84">Amritamayi</text><text x="165" y="333">Academic block</text><text x="560" y="333">Visitor services</text><text x="365" y="422">MAIN GATE</text></g><text x="385" y="310" fill="#66796b" font-family="Arial,sans-serif" font-size="13">Campus avenue</text><g fill="#fff" stroke="#bb0750" stroke-width="3"><circle cx="360" cy="385" r="15"/><circle cx="360" cy="235" r="15"/><circle cx="${left?'180':'540'}" cy="195" r="15"/><circle cx="${left?'180':'540'}" cy="120" r="15"/></g><g fill="#bb0750" font-family="Arial,sans-serif" font-size="13" font-weight="bold" text-anchor="middle"><text x="360" y="390">1</text><text x="360" y="240">2</text><text x="${left?'180':'540'}" y="200">3</text><text x="${left?'180':'540'}" y="125">4</text></g><circle id="route-position" cx="360" cy="385" r="24" fill="none" stroke="#227853" stroke-width="4"/></svg><div class="map-legend"><span><i class="route-line"></i>Your sample route</span><span><i class="route-ring"></i>Selected step</span></div><p class="hint">Select a step to highlight it on the map. No live location tracking.</p></section><aside class="panel"><h2>Follow the route</h2><div class="direction-steps">${steps.map(([name,text],i)=>`<button type="button" class="direction-step ${i===0?'selected':''}" data-route-step="${i}" aria-pressed="${i===0}"><span class="direction-number">${i+1}</span><span><strong>${esc(name)}</strong><small>${esc(text)}</small></span></button>`).join('')}</div><div class="actions"><button class="btn secondary" id="route-next">Next step →</button><a class="back" style="margin:0" href="#visitor">Back to request</a></div><p class="hint">After your visit, meet the warden for exit clearance before returning to the main gate.</p></aside></div>`;
+ let active=0;const points=[[360,385],[360,235],[left?180:540,195],[left?180:540,120]];
+ function selectStep(index){active=index;document.querySelectorAll('[data-route-step]').forEach(b=>{const selected=Number(b.dataset.routeStep)===index;b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected))});const marker=document.querySelector('#route-position');marker.setAttribute('cx',points[index][0]);marker.setAttribute('cy',points[index][1]);document.querySelector('#route-next').textContent=index===3?'Back to first step':'Next step →'}
+ document.querySelectorAll('[data-route-step]').forEach(b=>b.onclick=()=>selectStep(Number(b.dataset.routeStep)));document.querySelector('#route-next').onclick=()=>selectStep((active+1)%4);
+}
+'''+s[end:]
+s=s.replace("if(route==='#visitor')visitor();", "if(route.startsWith('#directions/'))directions(decodeURIComponent(route.slice(12)));else if(route==='#visitor')visitor();")
+p.write_text(s,encoding='utf-8')

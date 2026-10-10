@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import {api,validateFilters} from '../worker/api.mjs';
+const db=new DatabaseSync(':memory:');db.exec(fs.readFileSync('drizzle/0000_gate_state.sql','utf8'));
+const DB={prepare(sql){let values=[];return {bind(...v){values=v;return this},async first(){return db.prepare(sql).get(...values)},async run(){return {meta:{changes:db.prepare(sql).run(...values).changes}}}}}};
+const call=(path,body,headers={})=>api(new Request('https://example.test'+path,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json',Origin:'https://example.test',...headers}:headers,body:body?JSON.stringify(body):undefined}),{DB,GROQ_API_KEY:'test-secret'});
+const state={visits:[{id:'test-visit'}],logs:[],headSettings:{},incidents:[]};
+assert.deepEqual(await (await call('/api/state')).json(),{revision:0,state:null});
+assert.equal((await call('/api/state',{revision:0,state})).status,200);
+assert.equal((await call('/api/state',{revision:0,state})).status,409);
+assert.equal((await call('/api/state',{revision:1,state})).status,200);
+assert.equal((await call('/api/state',{revision:2,state:{...state,visits:[{id:'x'},{id:'x'}]}})).status,400);
+assert.equal((await call('/api/state',{revision:2,state},{Origin:'https://other.test'})).status,403);
+assert.throws(()=>validateFilters({from:'2026-02-30'}));assert.throws(()=>validateFilters({startHour:18}));
+const originalFetch=globalThis.fetch;
+function mock(value,status=200){globalThis.fetch=async(url,init)=>{assert.equal(url,'https://api.groq.com/openai/v1/chat/completions');assert.equal(init.headers.Authorization,'Bearer test-secret');return Response.json(status===200?{choices:[{message:{content:JSON.stringify(value)}}],usage:{completion_tokens:10}}:{},{status});};}
+mock({filters:{from:'2026-10-10',to:'2026-10-10',status:'completed'}});
+assert.equal((await call('/api/ai/search',{model:'openai/gpt-oss-20b',query:'completed visits yesterday',date:'2026-10-11'})).status,200);
+mock({ids:['invented']});assert.equal((await call('/api/ai/summary',{model:'openai/gpt-oss-20b',facts:[{id:'entries',text:'12 entries'}]})).status,400);
+mock({},429);assert.equal((await call('/api/ai/test',{model:'openai/gpt-oss-20b'})).status,503);
+globalThis.fetch=originalFetch;db.close();console.log('Hosted API checks passed: persistence, revision conflicts, request validation, grounded AI output and quota errors.');

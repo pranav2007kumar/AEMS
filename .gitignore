@@ -1,0 +1,9 @@
+
+runtime/
+data/
+*.log
+__pycache__/
+dist/server/
+dist/.openai/
+*.tar.gz
+*.png
