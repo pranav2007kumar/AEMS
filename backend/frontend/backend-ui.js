@@ -26,7 +26,7 @@ window.SharedState=(()=>{
 
  async function refresh(redraw=true){
 
-  if(user){const d=await request('/api/v1/state');visits=d.state.visits;logs=d.state.logs;incidents=d.state.incidents;headSettings={...d.state.headSettings,source:'browser'};headSource='browser'}
+  if(user&&!location.hash.startsWith('#visitor')){const d=await request('/api/v1/state');visits=d.state.visits;logs=d.state.logs;incidents=d.state.incidents;headSettings={...d.state.headSettings,source:'browser'};headSource='browser'}
 
   else{visits=[];for(const [id,t] of Object.entries(tokens())){try{visits.push(await request('/api/v1/public/visits/'+id,undefined,'GET',{'X-Visit-Token':t}))}catch{}}logs=[];incidents=[]}
 
@@ -60,13 +60,14 @@ window.SharedState=(()=>{
 
   const t=tokens()[id];if(!user&&!t)throw Error('Enter the private tracking token issued with this request.');
 
-  const v=await request(user?'/api/v1/visits/'+id:'/api/v1/public/visits/'+id,undefined,'GET',t?{'X-Visit-Token':t}:{});const i=visits.findIndex(x=>x.id===id);if(i<0)visits.push(v);else visits[i]=v;return v;
+  const v=await request(t?'/api/v1/public/visits/'+id:'/api/v1/visits/'+id,undefined,'GET',t?{'X-Visit-Token':t}:{});const i=visits.findIndex(x=>x.id===id);if(i<0)visits.push(v);else visits[i]=v;return v;
 
  }
 
  async function registryView(target){
 
   // When a target is given the registry renders inside the Security head page (no separate page heading / back links).
+
   const embedded=!!target,out=target||app,top=t=>embedded?'':t;
 
   out.innerHTML=top(heading('REPEAT CAMPUS ACCESS','Registered <span>vehicles</span>','Faculty, staff and approved daily visitors do not need a new warden request. Every entry still requires physical vehicle inspection.'))+'<section class="panel">Loading registrations…</section>';
@@ -170,7 +171,9 @@ window.SharedState=(()=>{
  }
 
  function wire(){
+
   const originalHeading=heading;heading=function(...args){return originalHeading(...args).replace(/<small[^>]*data-sync-status[^>]*>[\s\S]*?<\/small>/g,'')};
+
   const oldRender=render,oldVisitor=visitor,oldWarden=warden,oldSecurity=security,oldLookup=lookup,oldHead=securityHead,oldTracking=showTracking,oldReport=reportIncident,oldBind=bindIncidents;
 
   render=function(){
@@ -191,33 +194,65 @@ window.SharedState=(()=>{
 
    document.querySelectorAll('[data-student-id]').forEach(b=>b.onclick=()=>{field.value=b.dataset.studentId;field.oninput()});
 
-   f.onsubmit=safe(async()=>{const vals=Object.fromEntries(new FormData(f)),body={};for(const k of ['visitor','phone','relation','plate','studentId','purpose','date','vehicleType'])body[k]=vals[k];const d=await request('/api/v1/visits',body),saved=tokens();saved[d.visit.id]=d.tracking_token;sessionStorage.setItem('campus-tracking',JSON.stringify(saved));await refresh(false);f.reset();document.querySelector('#track-id').value=d.visit.id;oldTracking(d.visit.id);document.querySelector('#track-result').insertAdjacentHTML('beforeend',`<details><summary>Save your private tracking token</summary><p style="overflow-wrap:anywhere">${esc(d.tracking_token)}</p></details>`);toast('Request submitted. Save your request ID and tracking token.');});
+   f.onsubmit=safe(async()=>{const vals=Object.fromEntries(new FormData(f)),body={};for(const k of ['visitor','phone','relation','plate','studentId','purpose','date','vehicleType'])body[k]=vals[k];const d=await request('/api/v1/visits',body),saved=tokens();saved[d.visit.id]=d.tracking_token;sessionStorage.setItem('campus-tracking',JSON.stringify(saved));await refresh(false);if(!visits.some(v=>v.id===d.visit.id))visits.unshift(d.visit);f.reset();document.querySelector('#submit-visit').disabled=true;document.querySelector('#student-lookup-status').textContent='Enter a student ID for a new request.';sessionStorage.setItem('campus-last-request',d.visit.id);document.querySelector('#track-id').value=d.visit.id;oldTracking(d.visit.id);document.querySelector('#track-result').insertAdjacentHTML('beforeend',`<details><summary>Save your private tracking token</summary><p style="overflow-wrap:anywhere">${esc(d.tracking_token)}</p></details>`);toast('Request submitted. Save your request ID and tracking token.');});
 
-   document.querySelector('#track-form').onsubmit=safe(async()=>{const id=document.querySelector('#track-id').value.trim().toUpperCase();if(!tokens()[id]&&!user){const t=prompt('Enter the private tracking token');if(!t)return;const saved=tokens();saved[id]=t.trim();sessionStorage.setItem('campus-tracking',JSON.stringify(saved))}await loadTracking(id);oldTracking(id)});
+   document.querySelector('#track-form').onsubmit=safe(async()=>{const id=document.querySelector('#track-id').value.trim().toUpperCase();if(!tokens()[id]&&!user){const t=prompt('Enter the private tracking token');if(!t)return;const saved=tokens();saved[id]=t.trim();sessionStorage.setItem('campus-tracking',JSON.stringify(saved))}await loadTracking(id);sessionStorage.setItem('campus-last-request',id);oldTracking(id)});
+
+   const last=sessionStorage.getItem('campus-last-request');if(last&&visits.some(v=>v.id===last)){document.querySelector('#track-id').value=last;oldTracking(last)}
 
   };
 
-  showTracking=async id=>{try{await loadTracking(id);oldTracking(id)}catch(e){toast(e.message)}};
+  showTracking=async id=>{try{await loadTracking(id);sessionStorage.setItem('campus-last-request',id);oldTracking(id)}catch(e){toast(e.message)}};
 
   warden=function(){viewFilter=user.name;oldWarden();const select=document.querySelector('#warden-filter');select.innerHTML=`<option>${esc(user.name)}</option>`;select.disabled=true;select.closest('section').querySelector('p.hint').textContent='Only visits assigned to your authenticated account are shown.';
+
+   const closed=visits.filter(v=>['expired','rejected'].includes(effective(v))).length;
+
+   const counts=[['Total visits',visits.length],['Awaiting entry approval',visits.filter(v=>effective(v)==='pending').length],['Entry approved',visits.filter(v=>effective(v)==='approved').length],['Inside campus',visits.filter(v=>['inside','exit'].includes(v.status)).length],['Completed visits',visits.filter(v=>v.status==='completed').length],['Rejected / expired',closed]];
+
+   document.querySelector('.stats').innerHTML=counts.map(([label,count])=>`<div class="stat"><strong>${count}</strong><span>${label}</span></div>`).join('');
+
+   document.querySelector('.stats').style.gridTemplateColumns='repeat(auto-fit,minmax(160px,1fr))';
+
+   select.closest('section').querySelector('h2').textContent='Requests & visit history';
+
+   app.insertAdjacentHTML('beforeend',`<section class="panel" style="margin-top:22px"><div class="head-title"><h2>Approval & gate history</h2><button class="btn secondary" id="warden-refresh">Refresh records</button></div><p class="hint">Every action is linked to the same request ID shown above. Inside campus includes visitors awaiting departure or already cleared to leave.</p><div class="table-scroll"><table><thead><tr><th>Time (IST)</th><th>Request / vehicle</th><th>Action</th><th>Recorded by</th></tr></thead><tbody>${logs.map(l=>`<tr><td>${stamp(l.time)}</td><td>${esc(l.visit)}<br>${esc(l.plate)}</td><td>${esc(l.action)}<br><small>${esc(l.note||'')}</small></td><td>${esc(l.actor)}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">No visit activity yet.</td></tr>'}</tbody></table></div></section>`);
+
+   document.querySelector('#warden-refresh').onclick=safe(async()=>{await refresh();toast('Visit records refreshed.');});
 
    document.querySelectorAll('[data-action]').forEach(b=>b.onclick=safe(async()=>{const v=visits.find(x=>x.id===b.dataset.id),exit=b.dataset.action==='exit',verified=exit?document.querySelector(`[data-verify="${v.id}"]`).checked:false;if(exit&&!verified)throw Error('Verify the visitor and student first.');await request('/api/v1/visits/'+v.id+'/'+(exit?'exit-approval':'entry-approval'),{version:v.version,decision:b.dataset.action==='reject'?'reject':'approve',meeting_verified:verified});await refresh();toast('Approval recorded.')}));
 
   };
 
-  lookup=async function(){try{
+  lookup=async function(){foundId=null;document.querySelector('#gate-result').innerHTML='<div class="result-banner">Checking the latest approval...</div>';try{
 
-   await refresh(false);const config=await request('/api/v1/access-policy');if(gate==='entry'&&(config.mode==='lockdown'||visits.filter(v=>v.entered&&!v.exited).length>=config.capacity)){document.querySelector('#gate-result').innerHTML='<div class="result-banner bad"><strong>'+ (config.mode==='lockdown'?'Campus entry paused':'Campus vehicle capacity is full')+'</strong><br><small>Contact the security head. Departure checks remain available.</small></div>';return}const p=plate(document.querySelector('#plate-input').value);if(!p)throw Error('Enter the vehicle number.');document.querySelector('#plate-input').value=p;if(!originalPlate)document.querySelector('#plate-preview').textContent=p;
+   await refresh(false);const config=await request('/api/v1/access-policy');if(gate==='entry'&&(config.mode==='lockdown'||visits.filter(v=>v.entered&&!v.exited).length>=config.capacity)){document.querySelector('#gate-result').innerHTML='<div class="result-banner bad"><strong>'+ (config.mode==='lockdown'?'Campus entry paused':'Campus vehicle capacity is full')+'</strong><br><small>Contact the security head. Departure checks remain available.</small></div>';return}const input=document.querySelector('#plate-input'),query=input.value.trim().toUpperCase();foundId=null;
 
-   const normal=visits.filter(v=>v.access_type!=='registered'&&v.plate===p&&v.date===today()&&!['completed','rejected'].includes(v.status));
+   if(!query)throw Error('Enter a vehicle number or request ID.');
 
-   if(!normal.length){await registeredLookup(p);return}const all=visits;try{visits=all.filter(v=>v.access_type!=='registered');oldLookup()}finally{visits=all}
+   const byId=query.startsWith('AMV-');let selected=null;
+
+   if(byId){selected=await request('/api/v1/visits/'+encodeURIComponent(query));const i=visits.findIndex(v=>v.id===selected.id);if(i<0)visits.push(selected);else visits[i]=selected;}
+
+   const p=selected?selected.plate:plate(query);input.value=p;if(!originalPlate)document.querySelector('#plate-preview').textContent=p;
+
+   const normal=selected?[selected]:visits.filter(v=>v.access_type!=='registered'&&v.plate===p&&(gate==='exit'?['inside','exit'].includes(v.status):v.date===today()&&!['completed','rejected'].includes(v.status)));
+
+   if(!normal.length){await registeredLookup(p);return}
+
+   if(selected&&(gate==='entry'?selected.date!==today()||['completed','rejected'].includes(selected.status):!['inside','exit'].includes(selected.status))){document.querySelector('#gate-result').innerHTML=`<div class="result-banner bad"><strong>${esc(effective(selected)==='expired'?'Visit expired':selected.status==='completed'?'Visit already completed':selected.status==='rejected'?'Request rejected':gate==='entry'?'Visit is scheduled for '+selected.date:'Vehicle has not entered campus')}</strong><br><small>This request cannot authorize ${gate==='entry'?'entry':'departure'} now.</small></div><p>${esc(selected.id)}  /  ${esc(selected.plate)}<br>${esc(selected.visitor)}  /  ${esc(selected.student)}<br>Assigned warden: ${esc(selected.warden)}</p>`;return}
+
+   const all=visits;try{visits=normal;oldLookup()}finally{visits=all}
+
+   const result=document.querySelector('#gate-result'),match=visits.find(v=>v.id===foundId);
+
+   if(match)result.insertAdjacentHTML('beforeend',`<div class="result-details">${[['Entry approval',match.entryApproval?match.entryApproval.decision+'  /  '+match.entryApproval.by+'  /  '+stamp(match.entryApproval.at):'Awaiting warden decision'],['Exit approval',match.exitApproval?match.exitApproval.decision+'  /  '+match.exitApproval.by+'  /  '+stamp(match.exitApproval.at):'Not cleared for departure'],['Entry occupants',match.entry_person_count??'Not recorded'],['Exit recorded',stamp(match.exited)]].map(([k,v])=>`<div><span>${k}</span><strong>${esc(v)}</strong></div>`).join('')}</div>`);
 
    const b=document.querySelector('#confirm-passage');const matched=visits.find(x=>x.id===foundId);bindPersonCheck(matched?.entry_person_count??null);if(!b)return;b.onclick=safe(async()=>{const id=foundId;let v=visits.find(x=>x.id===id);const person_count=personCount(v.entry_person_count??null);const visible=document.querySelector('#plate-input').value,verified=document.querySelector('#guard-verified').checked;if(!verified)throw Error('Verify the visible plate and visitor first');if(gate==='entry'){if(!document.querySelector('#inspection-verified').checked)throw Error('Complete the physical inspection first');v=await request('/api/v1/visits/'+id+'/inspection',{version:v.version,passed:true,note:'Required physical vehicle inspection completed'})}await request('/api/v1/visits/'+id+'/'+gate,{version:v.version,plate:visible,visitor_verified:verified,gate_id:'MAIN',original_plate:originalPlate||visible,person_count});originalPlate='';await refresh();toast('Passage recorded.');});
 
-  }catch(e){toast(e.message)}};
+  }catch(e){document.querySelector('#gate-result').innerHTML='<div class="result-banner bad">'+esc(e.message)+'</div>';toast(e.message)}};
 
-  security=function(){oldSecurity();LiveCamera.attach({request,lookup,safe});document.querySelector('.section-label span').textContent='Camera / plate recognition';document.querySelector('.scan-controls')?.remove();document.querySelector('#plate-input').closest('label').insertAdjacentHTML('afterend',`<label class="field" style="margin-top:18px">Number of people ${gate==='entry'?'entering':'leaving'} (including driver)<input id="person-count" type="number" min="1" max="100" step="1" required placeholder="Guard: count all occupants"></label><p class="hint" id="person-count-check">${gate==='entry'?'Count everyone in the vehicle before confirming entry.':'Count everyone again. The exit count must equal the saved entry count.'}</p>`);const quick=document.createElement('section');quick.className='panel';quick.style.margin='18px 0';quick.innerHTML='<div class="head-title"><div><h2>Registered vehicles</h2><p class="hint">Look up faculty, staff and approved daily visitors. Active registration replaces a new warden request; inspection remains required.</p></div><a class="btn" href="#registry">Open registered vehicles →</a></div>';document.querySelector('.page-heading').after(quick);addCycles();detectionPanel();document.querySelector('#lookup').textContent='Check visit / registered permission →';};
+  security=function(){oldSecurity();const plateField=document.querySelector('#plate-input');plateField.maxLength=64;plateField.placeholder='Vehicle number or AMV request ID';plateField.closest('label').firstChild.textContent='Recognized plate / request ID / guard correction';LiveCamera.attach({request,lookup,safe});document.querySelector('.section-label span').textContent='Camera / plate recognition';document.querySelector('.scan-controls')?.remove();document.querySelector('#plate-input').closest('label').insertAdjacentHTML('afterend',`<label class="field" style="margin-top:18px">Number of people ${gate==='entry'?'entering':'leaving'} (including driver)<input id="person-count" type="number" min="1" max="100" step="1" required placeholder="Guard: count all occupants"></label><p class="hint" id="person-count-check">${gate==='entry'?'Count everyone in the vehicle before confirming entry.':'Count everyone again. The exit count must equal the saved entry count.'}</p>`);const quick=document.createElement('section');quick.className='panel';quick.style.margin='18px 0';quick.innerHTML='<div class="head-title"><div><h2>Registered vehicles</h2><p class="hint">Look up faculty, staff and approved daily visitors. Active registration replaces a new warden request; inspection remains required.</p></div><a class="btn" href="#registry">Open registered vehicles →</a></div>';document.querySelector('.page-heading').after(quick);addCycles();detectionPanel();document.querySelector('#lookup').textContent='Check approval / registered access →';};
 
   securityHead=function(){const selected=headTab;if(['occupancy','reads','policy','registry'].includes(selected))headTab='overview';oldHead();headTab=selected;if(['occupancy','reads','policy','registry'].includes(selected))document.querySelectorAll('[data-head-tab]').forEach(b=>b.classList.remove('active'));addCycles();headSource='browser';const source=document.querySelector('#head-source');source.value='browser';source.disabled=true;
 
@@ -242,4 +277,3 @@ window.SharedState=(()=>{
  return {start,enqueue(){},status:()=>status};
 
 })();
-

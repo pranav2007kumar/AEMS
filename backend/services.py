@@ -43,7 +43,11 @@ def visit_view(db, visit, user=None):
     inspection = db.scalar(select(Inspection).where(Inspection.visit_id == visit.id).order_by(Inspection.confirmed_at.desc()).limit(1))
     phone = visit.phone
     if user and user.role == 'security': phone = '******' + phone[-4:]
-    result.update(id=visit.id,visitor=visit.visitor_name,phone=phone,relation=visit.relationship,
+    approvals = {}
+    for row in db.scalars(select(Approval).where(Approval.visit_id == visit.id)):
+        actor = db.get(User, row.actor_id) if row.actor_id else None
+        approvals[row.phase] = {'decision': row.decision, 'by': actor.name if actor else result['warden'], 'at': row.created_at}
+    result.update(entryApproval=approvals.get('entry'), exitApproval=approvals.get('exit'), id=visit.id,visitor=visit.visitor_name,phone=phone,relation=visit.relationship,
         vehicleType=visit.vehicle_type,plate=visit.plate,purpose=visit.purpose,date=visit.visit_date,
         status=visit.status,created=visit.created_at,entered=visit.entered_at,exited=visit.exited_at,
         entry_person_count=visit.entry_person_count,exit_person_count=visit.exit_person_count,

@@ -266,3 +266,23 @@ def test_camera_frame_bridge_without_executing_model(clients,monkeypatch):
     assert clients['guard'].post('/api/v1/anpr/frames',json=body).json()['detection'] is None
     body['image']='not-an-image'*10
     assert clients['guard'].post('/api/v1/anpr/frames',json=body).status_code==422
+
+
+def test_parent_warden_security_share_request_and_approval_history(clients):
+    created=create(clients,'TN38ZZ8624');v=created['visit'];vid=v['id'];url='/api/v1/visits/'+vid
+    def shared(client):
+        return next(row for row in client.get('/api/v1/state').json()['state']['visits'] if row['id']==vid)
+    assert shared(clients['warden'])['status']=='pending'
+    assert shared(clients['guard'])['plate']==v['plate']
+    assert shared(clients['warden'])['entryApproval'] is None
+    r=clients['warden'].post(url+'/entry-approval',json={'version':v['version']})
+    assert r.status_code==200,r.text
+    approved=r.json()
+    assert approved['id']==vid and approved['entryApproval']['decision']=='approve'
+    tracked=clients['anon'].get('/api/v1/public/visits/'+vid,headers={'X-Visit-Token':created['tracking_token']}).json()
+    guard=clients['guard'].get(url).json()
+    assert tracked['status']==guard['status']==shared(clients['warden'])['status']=='approved'
+    assert tracked['entryApproval']==guard['entryApproval']==approved['entryApproval']
+    logs=clients['warden'].get('/api/v1/state').json()['state']['logs']
+    assert {row['action'] for row in logs if row['visit']==vid}=={'Request submitted','Entry approved'}
+    assert all(row['plate']==v['plate'] for row in logs if row['visit']==vid)
