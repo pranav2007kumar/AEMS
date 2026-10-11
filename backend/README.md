@@ -20,7 +20,7 @@ The head dashboard includes **Campus occupancy**, **Recognition & review** and *
 
 Head/admin can configure capacity, the recognition score threshold and normal/lockdown entry policy through `/api/v1/access-policy`. Entry confirmation for both registered and visitor vehicles rechecks these settings on the server. Lockdown does not disable departure. Policy versions serialize entry/capacity checks against concurrent policy changes. `/api/v1/monitoring/overview` is head/admin only; read review uses `/api/v1/anpr/detections/{id}/review`. A review never invents warden approval or confirms passage. Invalid-format/low-confidence readings become HOLD records instead of being silently corrected. The backend does not guess O/0 or I/1.
 
-The backend connection banner pauses dashboard edits on network failure and provides Retry. There is no automatic switch to browser demo decisions. The supplied model still is not loaded or executed by this build.
+The backend connection banner pauses dashboard edits on network failure and provides Retry. There is no automatic switch to browser demo decisions.
 
 | Function | Backend behavior |
 |---|---|
@@ -44,9 +44,9 @@ Guards must enter `person_count` (1–100, including the driver) at entry and ex
 
 The guard dashboard has Start camera, Stop camera and Recognize current frame controls. Browser camera access is requested only when the guard clicks Start camera; audio is disabled. Localhost or HTTPS is required. Leaving the page stops the camera tracks. Frames are sent to the local backend only when Recognize is clicked, and are processed in memory rather than saved as images.
 
-`GET /api/v1/anpr/camera-status` reports configuration without loading any model. `POST /api/v1/anpr/frames` accepts a bounded JPEG/PNG frame from an authenticated guard, uses the supplied `backend/models/campus-anpr.pt` through an optional Ultralytics detector, reads cropped plates with local EasyOCR, and passes the result into the audited detection API. Multiple plates and unreadable frames require manual review. Recognition never records passage automatically.
+`GET /api/v1/anpr/camera-status` reports configuration without loading any model. `POST /api/v1/anpr/frames` accepts a bounded JPEG/PNG frame from an authenticated guard, finds the plate with the trained YOLO11s detector (`backend/models/plate-detector.pt`), reads it with the trained CRNN (`backend/models/campus-anpr.pt`, EasyOCR only as a fallback), and passes the result into the audited detection API. Multiple plates and unreadable frames require manual review. Recognition never records passage automatically.
 
-Inference remains disabled unless `ANPR_ENABLE_INFERENCE=1` is explicitly set before starting the server. Install `backend/requirements-anpr.txt` into the backend runtime and provision EasyOCR English recognition and detection weights in `backend/models/ocr/` before enabling it. The runtime disables automatic OCR downloads. The supplied model's format/classes and real recognition accuracy remain unverified until loading/running is authorized. No model is imported or executed by startup, camera-status checks, or the integration tests (which mock recognition).
+Inference remains disabled unless `ANPR_ENABLE_INFERENCE=1` is explicitly set before starting the server. Install `backend/requirements-anpr.txt` first. See `backend/models/README.md` for the models and measured results. No model is imported or executed by startup, camera-status checks, or the integration tests (which mock recognition).
 
 ## Database tables
 

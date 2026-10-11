@@ -93,7 +93,7 @@ Everything the paper process did, but **before the car reaches the gate**, with 
 - Authorises exit **only after confirming the meeting actually happened**.
 
 ### 3. 🛂 Security Guard
-- **Camera number-plate recognition**: start the camera, click *Recognize current frame*. YOLO11 finds the plate, EasyOCR reads it.
+- **Camera number-plate recognition**: start the camera, click *Recognize current frame*. YOLO11 finds the plate, our trained CRNN reads it (EasyOCR is only a fallback).
 - The guard compares the **detected plate** with the **plate on the parent's form**, looks at the **confidence score** and decides.
 - Mandatory **vehicle inspection** and **people count** at entry **and** exit; the two counts must match.
 - Confirming records entry; departure is recorded only after warden clearance.
@@ -152,7 +152,7 @@ Plus **queue estimates** (how long the queue will take to clear) and **historica
 │  monitoring.py  head overview, occupancy, recognition summary            │
 │  tailgating.py  one-approval-one-vehicle cycles + alerts                 │
 │  anpr.py        audited plate-detection records + human review           │
-│  camera.py      frame → YOLO11 plate detector → crop → EasyOCR           │
+│  camera.py      frame → YOLO11 plate detector → crop → CRNN reader      │
 │  ai.py          LLM assistant (Groq) over database facts                 │
 │  security.py    scrypt, JWT, sessions, role guards                       │
 └───────────────┬──────────────────────────────────────────────────────────┘
@@ -172,7 +172,7 @@ Plus **queue estimates** (how long the queue will take to clear) and **historica
 | Database | SQLite, SQLAlchemy 2, Alembic |
 | Auth | PyJWT + scrypt |
 | Plate detection | Ultralytics YOLO11s (`plate-detector.pt`) |
-| Plate reading | EasyOCR English (`ocr/english_g2.pth`) |
+| Plate reading | Our CRNN: MobileNetV3-Large → BiLSTM → CTC (`campus-anpr.pt`); EasyOCR English as fallback |
 | LLM assistant | Groq API (optional) |
 | Tests | pytest (13 tests) |
 
@@ -192,9 +192,9 @@ AEMS/
 │   ├── migrations/                                          ← Alembic 0001–0007
 │   ├── frontend/                                            ← backend-ui.js, head-monitor.js, live-camera.js
 │   ├── models/
-│   │   ├── plate-detector.pt   (YOLO11s number-plate detector)
-│   │   ├── ocr/english_g2.pth  (EasyOCR English recognizer)
-│   │   └── campus-anpr.pt      (CRNN checkpoint, kept for reference — not the active reader)
+│   │   ├── plate-detector.pt   (YOLO11s number-plate detector, trained by us)
+│   │   ├── ocr/english_g2.pth  (EasyOCR English recognizer — fallback only)
+│   │   └── campus-anpr.pt      (CRNN plate-text reader, trained by us — primary OCR)
 │   ├── tests/test_backend.py
 │   ├── requirements.txt, requirements-anpr.txt
 │   └── run.py, start.ps1
@@ -270,7 +270,7 @@ PYTHONPATH=. python -m pytest backend/tests -q
 |---|---|
 | `PORT` | Server port (default `4174`) |
 | `LOCAL_DEMO_LOGIN` | `1` allows the `1234/1234` shortcut on loopback only |
-| `ANPR_ENABLE_INFERENCE` | `1` loads YOLO + EasyOCR for live recognition |
+| `ANPR_ENABLE_INFERENCE` | `1` loads the detector + OCR models for live recognition |
 | `GROQ_API_KEY` | Enables the LLM assistant |
 | `APP_ENV` / `JWT_SECRET` | `production` disables demo login and **requires** `JWT_SECRET` |
 | `DATABASE_URL` | Override the default SQLite file |
@@ -284,7 +284,7 @@ PYTHONPATH=. python -m pytest backend/tests -q
  Camera frame (in memory, never stored)
         │
         ▼
- YOLO11s plate detector ──▶ crop the plate ──▶ EasyOCR (English)
+ YOLO11s plate detector ──▶ crop the plate ──▶ CRNN reader (votes over a few crop views)
         │                                          │
         └──────────────── plate text + confidence ◀┘
                               │
@@ -292,7 +292,8 @@ PYTHONPATH=. python -m pytest backend/tests -q
         audited ANPR record  ──▶  guard compares with the approved form
 ```
 
-- Several plates in one frame or an unreadable frame always go to manual review.
+- Overlapping boxes on one plate are merged; several *different* plates in a frame, or an unreadable frame, go to manual review.
+- Reported confidence is the OCR text confidence. A read must be a valid Indian plate format with confidence ≥ 0.5; the entry policy (default 0.90) decides what is held for review.
 - The detector, OCR and form comparison are advisory. **The guard decides.**
 - Details of the supplied checkpoints are in [backend/models/README.md](backend/models/README.md).
 
