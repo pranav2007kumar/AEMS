@@ -15,7 +15,7 @@
 
 ---
 
-## 🛑 The Problem (how a parent's visit works today)
+## 🛑 The Problem (how a parent visit works today)
 
 When a parent or guardian arrives at the Amrita gate, this is what happens:
 
