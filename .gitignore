@@ -7,3 +7,11 @@ dist/server/
 dist/.openai/
 *.tar.gz
 *.png
+
+backend/.deps/
+backend/models/*.pt
+backend/models/ocr/
+.pytest_cache/
+Ultralytics/
+
+backend/models/camera-test-frame.jpg

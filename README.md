@@ -1,55 +1,294 @@
-# Amrita University Entry Monitoring System
+# 🚗 AEMS — Amrita Entry Monitoring System
 
-Static hackathon prototype styled after the supplied Amrita student portal reference.
+### The campus gate, with every visit accounted for — from visitor request to verified departure.
 
-Run `python monitor_server.py` from this directory and open http://127.0.0.1:4173/. This serves the static prototype and optional local AI adapter, bound to loopback only.
+> Visitors request permission, wardens approve, guards verify the vehicle, and the Security Head watches the whole gate — all on one shared, audited record.
 
-Four interfaces: Security Head monitoring at `/#head`, plus visitor requests and status tracking; warden entry and exit approvals; security plate correction, approval lookup, entry/exit records and audit history.
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
+![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-D71F00?style=flat)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat&logo=sqlite&logoColor=white)
+![YOLO](https://img.shields.io/badge/YOLO11-Ultralytics-111F68?style=flat)
+![EasyOCR](https://img.shields.io/badge/EasyOCR-ANPR-orange?style=flat)
+![Three.js](https://img.shields.io/badge/Three.js-000000?style=flat&logo=threedotjs&logoColor=white)
+![Groq](https://img.shields.io/badge/Groq-AI%20briefing-f55036?style=flat)
 
-Student lookup: enter `CB.CSE.DEMO01`, `CB.ECE.DEMO02`, or `CB.AI.DEMO03` (or select a sample button). Name, branch, hostel, and warden fill automatically. Unknown IDs cannot submit; assignments come from the sample directory rather than parent selection. ID-card image upload/OCR is not included.
+---
 
-Hostel directions: track approved sample request `AMV-DEMO01` and select Directions. The Three.js 3D scene includes detailed buildings, trees, shadows, road markings, and a highlighted route. Drag to rotate, scroll/pinch to zoom, select a route step, or play the vehicle tour. Reset, top view, and fullscreen controls are available. Three.js 0.180.0 is served locally from `dist/vendor`.
+## 🛑 The Problem
 
-The active renderer is `dist/campus-real.js`, using 99 OSM building footprints and 61 mapped roads/paths. Real hostel names and official contact information are shown. Building heights, facade detail and trees are illustrative. Routes are public-map approach previews, not approved visitor driving directions. See `CAMPUS_SOURCES.md` for all source links and limitations.
+University gates still run on paper registers and phone calls:
 
-Enable GPS requests browser location permission and uses `watchPosition` for live coordinates and accuracy. GPS coordinates stay on the device; the watch stops when leaving the directions page. The model is georeferenced to the OSM main gate. A location fix inside the mapped campus boundary enables the blue position marker, accuracy circle and Follow GPS. Outside-campus fixes display that status. Desktop GPS may be imprecise. Real-device GPS tracking and approved visitor routes require an on-campus check.
+| Problem | Reality |
+|---|---|
+| 📞 **Approval by phone** | A guard rings a warden, who rings the student. Nothing is recorded, nothing can be audited. |
+| 🔢 **Plate typos** | Vehicle numbers are copied by hand, so the same car is written three different ways. |
+| 🚪 **Tailgating** | One approval is supposed to cover one vehicle, but nobody counts what actually drives through. |
+| 👥 **Unknown head-count** | The number of people who entered is never compared with the number who left. |
+| 🧾 **Regulars are treated like strangers** | Faculty, staff and daily vendors need a fresh request on every visit. |
+| 📉 **No big picture** | The Security Head can't see who is inside right now, how busy the gate is, or which visits need attention. |
 
-Sample flow: scan TN38AB1234 in Security, verify and record entry, approve its exit in Warden after checking the verification box, then scan at the exit gate and record departure. KL07CD5678 starts with entry approval pending.
+---
 
-Data lives in localStorage in the same browser/origin. Student/visitor names and warden assignments are fictional demo records; campus building names and geometry come from public sources. This prototype does not include real ANPR, role authentication, a shared backend, university student records, camera snapshots, or physical gate control. Production use needs these integrations and verified institutional approval rules. Never use real visitor personal data in this demo.
+## ✅ What AEMS Does
 
+```
+ Visitor              Warden                Guard (gate)            Security Head
+   │                    │                      │                        │
+   │ 1. Request visit   │                      │                        │
+   ├───────────────────▶│                      │                        │
+   │                    │ 2. Approve entry     │                        │
+   │                    ├─────────────────────▶│                        │
+   │                    │                      │ 3. Read plate (ANPR),  │
+   │                    │                      │    inspect, count      │
+   │                    │                      │    people, record      │
+   │                    │                      │    entry               │
+   │                    │ 4. Verify the visit, │                        │
+   │                    │    authorise exit    │                        │
+   │                    ├─────────────────────▶│ 5. Count people again, │
+   │                    │                      │    record departure    │
+   │                    │                      ├───────────────────────▶│
+   │                    │                      │   everything audited   │
+```
 
-## Security Head monitoring
+Four portals, one backend, one database. Whatever one portal changes, the others see.
 
-`/#head` includes inspection queue inputs and lane suggestions; hourly-average traffic forecasts; full visit and audit history with CSV/JSON export; visit timelines; configurable outside-hours and dwell-time flags with persistent review notes; plain-language filtering and downloadable dated security briefings. Browser records and generated 15-day sample history are separate sources. Sample history is never inserted into visit/audit storage. Review notes and queue settings are browser-local.
+---
 
-Queue counting currently uses manual observations, not camera detection. The queue estimate assumes a uniform service duration, idle lanes, and no new arrivals; it does not reduce the physical inspection required for every vehicle. Entry confirmation now requires a guard's physical-inspection confirmation in addition to plate/visitor verification. `lookupToPassageSeconds` is elapsed time since the last approval lookup, not measured inspection duration.
+## 🧩 Feature Breakdown
 
-Forecasts use mean hourly counts across recorded dates within the previous 14 complete calendar days, require at least 3 recorded dates, and exclude today's incomplete traffic. Missing dates are not counted as zero-traffic dates. Anomalies are rule-based review flags, not a trained ML classifier or evidence of misconduct.
+### 1. 🙋 Visitor Portal
+- Request permission to meet a student; the student, hostel and **assigned warden** are looked up from the directory (not picked by the visitor).
+- Every request gets a request ID and a **private tracking token**, so only the visitor can track entry and exit approval.
+- Hostel directions on a **3D campus map** (Three.js) built from OpenStreetMap footprints.
 
-Plain-language search falls back to a deterministic parser: dates, last weekday, time-of-day, vehicle type, status and vehicle plates. Unknown words trigger clarification. Night means 18:00–05:59 on the selected calendar date, not a period spanning two date filters. Historic records lacking vehicle type do not match type filters. Results are always retrieved from existing selected records.
+### 2. 🧑‍⚖️ Warden Dashboard
+- Sees only the visits assigned to their own account.
+- Approves or rejects entry, and **authorises exit only after confirming the meeting actually happened**.
 
-Optional LLM: install/run Ollama separately with an installed local model. Under Search & daily briefing → Local LLM connection, check the connection, select a model and explicitly enable Use local LLM. The adapter uses Ollama structured JSON outputs (`https://ollama.com/blog/structured-outputs`), validates returned filters, and never asks the model to invent record results. Daily briefings let the model order verified aggregate fact IDs; report text is assembled from those facts. Missing/offline models leave deterministic tools available. No model is bundled or downloaded automatically. Server-side guards restrict adapter calls to the local preview origin; this is not production authentication.
+### 3. 🛂 Security (Guard) Dashboard
+- Look up a plate and see the approval status in one step.
+- **Live camera ANPR** — YOLO11 plate detector + EasyOCR reader. Frames are processed in memory and never saved; recognition never records passage on its own.
+- Mandatory **vehicle inspection** and **people count** (entry and exit counts must match, otherwise the departure is blocked with HTTP 409).
+- **Tailgating simulation** — one approval covers one vehicle; a count above one raises an alert and blocks further entries until a guard records an outcome.
 
-Run `node test_head.cjs` and `node check_lookup.cjs` for analytics and existing student/directions checks. `node test_inspection.cjs` verifies mandatory inspection plus approval/exit safeguards in isolated storage. `python -m unittest test_monitor_server.py` verifies adapter validation without a running LLM.
+### 4. 🧑‍💼 Security Head Dashboard
+A sidebar of everything the head needs, all inside one page:
 
+| Section | What it shows |
+|---|---|
+| **Overview** | Capacity bar, recognition decisions, last-12-hours activity, guard review queue |
+| **Vehicles inside** | Who is on campus right now and their exit-permission state |
+| **Plate review** | Uncertain / unknown plate reads waiting for a human decision, plus searchable recognition history (CSV export) |
+| **Registered vehicles** | Approve, suspend and search regular vehicles (faculty, staff, daily visitors, vendors) |
+| **Incidents** | Report → acknowledge → investigate → outcome → resolve |
+| **History** | Past visits and the audit trail |
+| **AI assistant** | Daily briefing and Q&A over authorised aggregate facts only |
+| **Settings** | Vehicle capacity, minimum recognition score, normal / lockdown entry policy |
 
-## Connected local prototype
+### 5. 🪪 Registered Vehicles
+- Faculty, staff, approved daily visitors and vendors get an expiring registration instead of a new warden request every time.
+- An exact plate match gives entry permission — **inspection is still mandatory**.
+- Suspension or expiry blocks new entry, but a vehicle already inside can still leave.
 
-All four portals now share a revision-checked SQLite snapshot at `data/gate-state.sqlite3` through `/api/state`. Existing browser data is imported when the database is empty; subsequent sessions load server records. Browser snapshots are kept as backups. Conflicting saves are rejected and the latest state is loaded, with the rejected snapshot kept in `amrita-conflict-backup`; staff must review and repeat the action. Polling occurs every five seconds. This loopback-only preview shares across browsers on this computer, not across campus devices; authentication and deployment are still required.
+### 6. 🤖 AI Briefing (optional)
+- Head/admin only. The backend supplies authorised aggregate facts and validates the output; **the AI can never grant a permission**.
 
-Reported flags create assigned incidents. Gate security or the warden acknowledges the incident, records an investigation note, and resolves it with an outcome. The head sees the incident timeline. No automatic blacklist, permission cancellation, barrier operation, SMS or email is triggered. Sample incidents stay labelled and do not alter real visit permission. Briefing facts include inspections and incident counts.
+---
 
-The free local Ollama API runs at 127.0.0.1:11434, cloud disabled, with CPU runtime and models stored under `runtime/`. The security-head page discovers installed models. Search and summary responses include real model name, elapsed inference time and token count. Under Local LLM connection, Test AI live calls `/api/ai/test` and shows an actual generated response.
+## 🔒 Safety Rules Built Into the Backend
 
-Standalone presentation: `dist/tech-journey.html`. One self-contained file, no network requests or libraries, with an exact 180-second tour, manual checkpoints, speaker script, keyboard controls and print layout. Open it directly from disk for an offline review.
+| Rule | How it's enforced |
+|---|---|
+| Recognition ≠ permission | A plate read never records passage; a human guard always confirms |
+| No guessing | Low-confidence / invalid plates become `HOLD` reads — O/0 and I/1 are never auto-corrected |
+| One plate, one place | A unique occupancy record stops the same plate entering twice at once |
+| Head-count matching | Exit count must equal the saved entry count |
+| Capacity & lockdown | Re-checked on the server at the moment of entry; exits are never blocked |
+| Role-based access | HttpOnly cookie + signed JWT, server-side revocation, salted **scrypt** password hashes |
+| Optimistic locking | Every approval carries a `version`, so two staff members can't overwrite each other |
+| Full audit trail | Approvals, suspensions, policy changes and reviews record the responsible staff account |
 
-## Mistral online connection and Round 2
+---
 
-Security head → Search & daily briefing → Mistral online API + local backup supports Mistral chat completions through the Python server. Use a Mistral Studio account in Free mode. The app cannot inspect the account's billing plan; do not enable paid billing. There is no automatic paid fallback or retry. The default online model is `ministral-3b-latest`; `mistral-small-latest` is also selectable but returned a quota limit during verification. Search questions and date context, or aggregate briefing facts, are sent to Mistral; complete visit records and images are not uploaded automatically. Avoid private details in online search questions.
+## 🏛️ System Architecture
 
-The provided key is held only in server memory, not files, browser storage or SQLite. Re-enter it after a server restart. The live test, completed-visits-yesterday filter extraction, and fact-ID prioritization were verified against Mistral on 11 October 2026. The browser retrieves matching records locally and appends all remaining verified briefing facts, so an incomplete model ordering cannot remove facts. Physical inspection and human approval remain mandatory.
+```
+┌──────────────────────── Browser (single-page UI) ────────────────────────┐
+│  Visitor · Warden · Guard · Security Head  (vanilla JS, Three.js 3D map)  │
+│  dist/*.js  +  backend/frontend/{backend-ui, head-monitor, live-camera}   │
+└───────────────────────────────┬──────────────────────────────────────────┘
+                                │  REST  /api/v1/…   (cookie + JWT)
+┌───────────────────────────────▼──────────────────────────────────────────┐
+│                         FastAPI backend (backend/)                        │
+│  main.py        auth, visits, approvals, incidents, queue, analytics      │
+│  registry.py    registered-vehicle approval, lookup, entry                │
+│  monitoring.py  head overview, occupancy, recognition summary             │
+│  tailgating.py  one-approval-one-vehicle cycles + alerts                  │
+│  anpr.py        audited plate-detection records and human review          │
+│  camera.py      frame → YOLO11 detector → plate crop → EasyOCR            │
+│  ai.py          Groq / local-relay briefing (facts only)                  │
+│  security.py    scrypt, JWT, sessions, role guards                        │
+└───────────────┬──────────────────────────────────────────────────────────┘
+                │  SQLAlchemy 2 + Alembic migrations (0001 … 0007)
+                ▼
+          SQLite database  (data/, never committed)
+```
 
-Groq is now the selected online provider. `openai/gpt-oss-20b` was verified through `/api/ai/test`, `/api/ai/search`, and `/api/ai/summary`: 0.75 s generic test, 1.00 s structured date/status search, and 0.59 s verified fact ordering in this run. These are individual observations, not latency guarantees. The key stays in server memory. The UI provides Groq and Mistral setup fields; use the provider's Free plan and do not upgrade billing. Provider quota errors do not trigger paid fallback. The adapter sends a descriptive app User-Agent required by the Groq gateway.
+---
 
-`Round_2_Preparation.md` contains the timed speaking script and likely judge questions. The presentation distinguishes implemented workflows and Mistral assistance from the planned camera/YOLO/PaddleOCR integration.
+## 💻 Tech Stack
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| Frontend | Vanilla JS + CSS | Four role-based portals, no build step |
+| 3D map | Three.js 0.180 + OSM data | Hostel directions and route preview |
+| Backend | FastAPI + Uvicorn | REST API, interactive docs at `/docs` |
+| Database | SQLite + SQLAlchemy 2 + Alembic | Normalised records with versioned migrations |
+| Auth | PyJWT + scrypt | Role-based sessions |
+| Plate detection | Ultralytics YOLO11s | Finds the number plate in a frame |
+| Plate reading | EasyOCR (English) | Reads the cropped plate locally |
+| AI briefing | Groq API *(optional)* | Head-only daily summary / Q&A |
+| Tests | pytest | API, registry, occupancy, tailgating, head-count rules |
+
+---
+
+## 📁 Repository Structure
+
+```
+AEMS/
+├── README.md                    ← You are here
+├── backend/                     ← FastAPI service
+│   ├── main.py                  ← App, auth, visits, approvals, incidents
+│   ├── registry.py              ← Registered vehicles
+│   ├── monitoring.py            ← Security-head overview
+│   ├── tailgating.py            ← Passage count + alerts
+│   ├── anpr.py / camera.py      ← Plate recognition pipeline
+│   ├── ai.py                    ← Optional AI briefing
+│   ├── models.py, schemas.py    ← Database + API models
+│   ├── migrations/              ← Alembic versions 0001–0007
+│   ├── frontend/                ← Backend-connected UI layers
+│   │   ├── backend-ui.js        ← Portals wired to the API
+│   │   ├── head-monitor.js      ← Security-head sidebar + views
+│   │   └── live-camera.js       ← Browser camera + recognise-frame
+│   ├── models/README.md         ← ANPR weight notes (weights not committed)
+│   └── tests/test_backend.py
+├── dist/                        ← Static UI, 3D campus, vendor Three.js
+├── worker/, scripts/, drizzle/  ← Hosted demo variant
+├── monitor_server.py            ← Lightweight static demo server (port 4173)
+├── campus-osm.xml, campus-roads-2025.pdf, CAMPUS_SOURCES.md  ← Map sources
+└── Round_2_Preparation.md
+```
+
+---
+
+## ⚙️ Quick Start
+
+### Prerequisites
+
+| Item | Requirement |
+|---|---|
+| OS | Windows / macOS / Linux |
+| Python | 3.x with `pip` |
+| Camera ANPR *(optional)* | `backend/requirements-anpr.txt` + model weights |
+
+### 1. Clone
+
+```bash
+git clone https://github.com/pranav2007kumar/AEMS.git
+cd AEMS
+```
+
+### 2. Install
+
+```bash
+pip install -r backend/requirements.txt
+```
+
+### 3. Run
+
+```powershell
+# Windows PowerShell
+$env:PORT = "4174"; $env:IMPORT_LEGACY = "1"; $env:LOCAL_DEMO_LOGIN = "1"
+python -u backend/run.py
+```
+
+```bash
+# macOS / Linux
+PORT=4174 IMPORT_LEGACY=1 LOCAL_DEMO_LOGIN=1 python -u backend/run.py
+```
+
+Open **http://127.0.0.1:4174/** — API docs at **http://127.0.0.1:4174/docs**.
+
+### 4. Sign in (local demo only)
+
+With `LOCAL_DEMO_LOGIN=1` the staff portals accept **`1234` / `1234`** on loopback. This shortcut is rejected in production and for non-loopback requests. Real accounts get generated passwords written to `data/backend-demo-accounts.txt`, which is never committed. Visitors don't need to sign in.
+
+Student IDs to try in the visitor form: `CB.CSE.DEMO01`, `CB.ECE.DEMO02`, `CB.AI.DEMO03`.
+
+### 5. Run the tests
+
+```bash
+python -m pytest backend/tests
+```
+
+### Environment variables
+
+| Variable | Purpose |
+|---|---|
+| `PORT` | Server port (default `4174`) |
+| `DATABASE_URL` | Database location (defaults to local SQLite) |
+| `APP_ENV` | Set `production` to disable demo login and require `JWT_SECRET` |
+| `JWT_SECRET` | Session signing secret (**required in production**) |
+| `GROQ_API_KEY` | Enables the AI briefing (optional) |
+| `ANPR_ENABLE_INFERENCE` | `1` to load the plate detector + OCR |
+| `TEST_PASSWORD` | Fixed password for seeded accounts (testing only) |
+
+---
+
+## 📷 Camera Plate Recognition (optional)
+
+```
+Browser camera ─▶ "Recognize current frame" ─▶ YOLO11s plate detector
+                                                     │
+                                         cropped plate ▼
+                                              EasyOCR (English)
+                                                     │
+                                                     ▼
+                              audited ANPR record  ─▶  guard confirms
+```
+
+- Camera starts only when the guard clicks **Start camera**; audio is off; leaving the page releases the tracks.
+- Model weights are **not** in this repo — see [backend/models/README.md](backend/models/README.md). Install `backend/requirements-anpr.txt` and set `ANPR_ENABLE_INFERENCE=1`.
+- Multiple plates or unreadable frames always go to manual review.
+
+---
+
+## ⚠️ Honest Limitations
+
+This is a hackathon prototype, and we'd rather say so than overstate it:
+
+- Plate-recognition accuracy has been smoke-tested, **not benchmarked**.
+- Vehicle counting and the gate barrier are **simulated** — no physical sensors or barrier are connected.
+- The demo `1234` login is for local use only.
+- Queue forecasting is a historical hourly baseline, not a trained ML model.
+- Campus map building heights, facades and trees are illustrative; routes are approach previews.
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repo
+2. Create a branch: `git checkout -b feat/your-feature`
+3. Add or change an endpoint in `backend/`, with a test in `backend/tests/`
+4. Open a PR describing what changed and why
+
+---
+
+## 📄 License
+
+Not yet specified — add a `LICENSE` file before reusing this code.
+
+---
+
+*Built with ❤️ for a hackathon — every visit, accounted for.*

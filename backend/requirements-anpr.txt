@@ -1,0 +1,6 @@
+# Install torch/torchvision CPU builds from https://download.pytorch.org/whl/cpu
+torch>=2.6
+torchvision>=0.21
+ultralytics==8.4.175
+Pillow>=10
+easyocr==1.7.2
