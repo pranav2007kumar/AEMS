@@ -1,5 +1,5 @@
-from pathlib import Path
-p=Path('D:/Hackathons/Genesis/amrita-entry/dist')
+﻿from pathlib import Path
+p=Path(__file__).resolve().parents[1]/'dist'
 s=(p/'campus3d.js').read_text(encoding='utf-8')
 s=s.replace("import {campusConfig} from './campus-config.js';",'')
 s=s.replace('export function mountCampus(container,hostel,onStep){',"export async function mountCampus(container,hostel){\n const data=await fetch('./campus-data.json').then(r=>{if(!r.ok)throw new Error('Campus map unavailable');return r.json()});\n if(!container.isConnected)return {dispose(){},setStep(){}};\n const campusConfig={verified:true,geoReference:{...data.origin,x:0,z:0,bearingDegrees:0}};")
@@ -56,6 +56,6 @@ s=s.replace('45,230','45,550').replace('distance=160;targetGoal.set(0,0,-3)','di
 s=s.replace('const x=ref.x+east*Math.cos(angle)-north*Math.sin(angle),z=ref.z-east*Math.sin(angle)-north*Math.cos(angle);','const x=(ref.x+east*Math.cos(angle)-north*Math.sin(angle))*data.metresToWorld,z=(ref.z-east*Math.sin(angle)-north*Math.cos(angle))*data.metresToWorld;')
 s=s.replace('if(Math.abs(x)>85||Math.abs(z)>73)','if(x<minX||x>maxX||z<minZ||z>maxZ)')
 s=s.replace('Math.min(accuracy,100)','Math.min(accuracy*data.metresToWorld,100)')
-s=s.replace('Live campus position · updated','Public-map position · updated')
+s=s.replace('Live campus position Â· updated','Public-map position Â· updated')
 s=s.replace('Interactive 3D sample campus','Interactive 3D Coimbatore campus')
 (p/'campus-real.js').write_text(s,encoding='utf-8')

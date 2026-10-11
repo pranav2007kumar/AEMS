@@ -1,10 +1,10 @@
 # Campus gate backend
 
-The local full stack prototype runs at **http://127.0.0.1:4174/**. The existing demo on port 4173 and the hosted Site are unchanged. Interactive API documentation: **http://127.0.0.1:4174/docs**.
+The full-stack backend runs at **http://127.0.0.1:4174/** by default. Interactive API documentation: **http://127.0.0.1:4174/docs**.
 
 ## Start
 
-From `D:\Hackathons\Genesis\amrita-entry`, run `backend\start.ps1`. The bundled Python runtime and dependencies in `backend/.deps` are used. To install elsewhere, install `backend/requirements.txt`, then run `python backend/run.py` with the repository root in PYTHONPATH. Port defaults to 4174.
+From the repository root, run `pip install -r backend/requirements.txt`, then `PYTHONPATH=. python -u backend/run.py` (or `backend/start.ps1` on Windows). Port defaults to 4174.
 
 Local accounts and generated passwords are in `data/backend-demo-accounts.txt`. They are not source controlled. This is a local demonstration; do not expose demo accounts publicly. Sessions use HttpOnly cookies, signed JWTs, server-side revocation and assigned roles. Passwords use salted scrypt hashes.
 
@@ -94,7 +94,7 @@ The supplied model's architecture/classes and whether it outputs plate text or b
 
 ## Provider setup
 
-Set `GROQ_API_KEY` in the backend process environment for direct provider access. No key belongs in browser code or source control. Current local testing may use `LOCAL_AI_RELAY=http://127.0.0.1:4173`, a transitional loopback adapter using the already configured demo backend. It requires that old local process to remain running. Provider keys and responses are not stored in the database. No billing subscription is purchased by this code; free-tier availability depends on the provider account and limits.
+Set `GROQ_API_KEY` in the backend process environment for direct provider access. No key belongs in browser code or source control. The assistant is optional; without a key the AI endpoints report that it is not configured. Provider keys and responses are not stored in the database. No billing subscription is purchased by this code; free-tier availability depends on the provider account and limits.
 
 ## Validation and deployment limits
 

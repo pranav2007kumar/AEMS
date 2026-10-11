@@ -1,8 +1,8 @@
 # 🚗 AEMS — Amrita Entry Monitoring System
 
-### The campus gate, with every visit accounted for — from visitor request to verified departure.
+### Paper registers and signed slips at the gate, replaced by one verified digital trail — from the parent's request to the car leaving campus.
 
-> Visitors request permission, wardens approve, guards verify the vehicle, and the Security Head watches the whole gate — all on one shared, audited record.
+> A parent fills the visit form before arriving. The warden approves it. The gate camera reads the number plate and the guard checks it against the approved request. On the way out, the warden's verification and the head-count are checked again. The Security Head watches everything, with an AI assistant on top of the database.
 
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
@@ -11,284 +11,308 @@
 ![YOLO](https://img.shields.io/badge/YOLO11-Ultralytics-111F68?style=flat)
 ![EasyOCR](https://img.shields.io/badge/EasyOCR-ANPR-orange?style=flat)
 ![Three.js](https://img.shields.io/badge/Three.js-000000?style=flat&logo=threedotjs&logoColor=white)
-![Groq](https://img.shields.io/badge/Groq-AI%20briefing-f55036?style=flat)
+![Groq](https://img.shields.io/badge/Groq-LLM%20assistant-f55036?style=flat)
 
 ---
 
-## 🛑 The Problem
+## 🛑 The Problem (how a parent's visit works today)
 
-University gates still run on paper registers and phone calls:
+When a parent or guardian arrives at the Amrita gate, this is what happens:
 
-| Problem | Reality |
+1. The parent **gets out of the vehicle** and writes the **vehicle number, the student's details and the hostel details** in a **paper register**.
+2. The security guard hands over a **paper slip** naming the person being visited.
+3. The parent and the student walk to the **warden**, who **signs the slip**.
+4. When the parent leaves, the guard **checks the slip** and lets the vehicle go.
+
+| What goes wrong | Why it hurts |
 |---|---|
-| 📞 **Approval by phone** | A guard rings a warden, who rings the student. Nothing is recorded, nothing can be audited. |
-| 🔢 **Plate typos** | Vehicle numbers are copied by hand, so the same car is written three different ways. |
-| 🚪 **Tailgating** | One approval is supposed to cover one vehicle, but nobody counts what actually drives through. |
-| 👥 **Unknown head-count** | The number of people who entered is never compared with the number who left. |
-| 🧾 **Regulars are treated like strangers** | Faculty, staff and daily vendors need a fresh request on every visit. |
-| 📉 **No big picture** | The Security Head can't see who is inside right now, how busy the gate is, or which visits need attention. |
+| 📖 **Handwritten register** | Slow, hard to read, impossible to search. Nobody can say who was inside at 3 pm last Tuesday. |
+| 🧾 **Paper slips** | Can be lost, copied or forged. The guard can't tell a genuine signature from a fake one. |
+| 🚶 **Parent must leave the car at the gate** | Queues build up, and the parent walks around a campus they don't know. |
+| 🗺️ **First-time visitors don't know the way** | Parents have no idea where the hostel is. |
+| 🔢 **Plate numbers copied by hand** | Typos mean the number on the slip may not match the car that leaves. |
+| 🚪 **No head-count** | Nobody records how many people entered or left in the vehicle. |
+| 🔁 **Daily regulars treated like strangers** | Faculty, staff and daily vendors go through the same register every day. |
+| 📉 **No visibility for the Security Head** | No idea how busy the gate is, when to put more guards on duty, or which vehicles stayed inside too long. |
 
 ---
 
-## ✅ What AEMS Does
+## ✅ Our Solution
+
+Everything the paper process did, but **before the car reaches the gate**, with the **number plate as the key**.
 
 ```
- Visitor              Warden                Guard (gate)            Security Head
-   │                    │                      │                        │
-   │ 1. Request visit   │                      │                        │
-   ├───────────────────▶│                      │                        │
-   │                    │ 2. Approve entry     │                        │
-   │                    ├─────────────────────▶│                        │
-   │                    │                      │ 3. Read plate (ANPR),  │
-   │                    │                      │    inspect, count      │
-   │                    │                      │    people, record      │
-   │                    │                      │    entry               │
-   │                    │ 4. Verify the visit, │                        │
-   │                    │    authorise exit    │                        │
-   │                    ├─────────────────────▶│ 5. Count people again, │
-   │                    │                      │    record departure    │
-   │                    │                      ├───────────────────────▶│
-   │                    │                      │   everything audited   │
+ PARENT / GUARDIAN        STUDENT           WARDEN               SECURITY GUARD            SECURITY HEAD
+        │                    │                 │                        │                       │
+ 1. Fills the visit form     │                 │                        │                       │
+    (vehicle no., student ID │                 │                        │                       │
+    → hostel + warden are    │                 │                        │                       │
+    filled in automatically) │                 │                        │                       │
+        │──────────────────────────────────────▶ 2. Warden approves     │                       │
+        │                    │                 │    the entry           │                       │
+        │ 3D map shows the   │                 │                        │                       │
+        │ route to the hostel│                 │                        │                       │
+        │                                      │          4. Camera reads the plate (ANPR)      │
+        │                                      │             Guard compares it with the form,   │
+        │                                      │             inspects, counts people, ALLOWS    │
+        │                    5. Visit with the student                  │                       │
+        │──────────────────────────────────────▶ 6. Warden verifies     │                       │
+        │                                      │    the visit, clears   │                       │
+        │                                      │    the exit            │                       │
+        │                                      │          7. Guard counts people again,        │
+        │                                      │             records departure ───────────────▶│
+        │                                      │                                  Monitors, charts, AI assistant
 ```
 
-Four portals, one backend, one database. Whatever one portal changes, the others see.
+### What changed for each person
+
+| Before (paper) | Now (AEMS) |
+|---|---|
+| Parent writes in a register at the gate | Parent fills the form in advance; typing the **student ID auto-fills branch, hostel and the assigned warden** |
+| Guard issues a paper slip | No slip. The approval lives in the database |
+| Parent asks for directions | **3D campus map** with a route to the correct hostel |
+| Guard reads the plate by eye | **Camera + YOLO + OCR read the plate**; the guard just confirms it matches the approved form |
+| Warden signs a slip | Warden approves the entry and later **verifies the visit before exit** |
+| Nobody counts people | Guard records the head-count **in and out**; a mismatch blocks departure |
+| Guard checks the slip on exit | Exit is only possible once the warden has cleared it |
+| Head has no overview | Live dashboard, AI chat, anomaly alerts, staffing insight |
 
 ---
 
-## 🧩 Feature Breakdown
+## 🧩 The Four Portals
 
-### 1. 🙋 Visitor Portal
-- Request permission to meet a student; the student, hostel and **assigned warden** are looked up from the directory (not picked by the visitor).
-- Every request gets a request ID and a **private tracking token**, so only the visitor can track entry and exit approval.
-- Hostel directions on a **3D campus map** (Three.js) built from OpenStreetMap footprints.
+### 1. 🙋 Visitor (Parent / Guardian)
+- Fill the request: visitor details, vehicle number, student ID, purpose, date.
+- **Student ID → auto-mapped** to the student's name, branch, hostel and assigned warden. Unknown IDs can't be submitted.
+- **3D campus navigation** (Three.js, built from OpenStreetMap footprints: 99 buildings, 61 roads/paths) to guide first-time visitors to the right hostel.
+- Private **request ID + tracking token** to follow entry and exit approval.
 
-### 2. 🧑‍⚖️ Warden Dashboard
-- Sees only the visits assigned to their own account.
-- Approves or rejects entry, and **authorises exit only after confirming the meeting actually happened**.
+### 2. 🧑‍⚖️ Warden
+- Sees only visits for students **assigned to their own account**.
+- Approves or rejects entry (the student asks their warden, exactly as with an outpass).
+- Authorises exit **only after confirming the meeting actually happened**.
 
-### 3. 🛂 Security (Guard) Dashboard
-- Look up a plate and see the approval status in one step.
-- **Live camera ANPR** — YOLO11 plate detector + EasyOCR reader. Frames are processed in memory and never saved; recognition never records passage on its own.
-- Mandatory **vehicle inspection** and **people count** (entry and exit counts must match, otherwise the departure is blocked with HTTP 409).
-- **Tailgating simulation** — one approval covers one vehicle; a count above one raises an alert and blocks further entries until a guard records an outcome.
+### 3. 🛂 Security Guard
+- **Camera number-plate recognition**: start the camera, click *Recognize current frame*. YOLO11 finds the plate, EasyOCR reads it.
+- The guard compares the **detected plate** with the **plate on the parent's form**, looks at the **confidence score** and decides.
+- Mandatory **vehicle inspection** and **people count** at entry **and** exit; the two counts must match.
+- Confirming records entry; departure is recorded only after warden clearance.
+- Tailgating simulation: one approval covers one vehicle; a higher count raises an alert.
 
-### 4. 🧑‍💼 Security Head Dashboard
-A sidebar of everything the head needs, all inside one page:
+### 4. 🧑‍💼 Security Head
+Sidebar sections, all on one page:
 
-| Section | What it shows |
+| Section | What it gives the head |
 |---|---|
-| **Overview** | Capacity bar, recognition decisions, last-12-hours activity, guard review queue |
-| **Vehicles inside** | Who is on campus right now and their exit-permission state |
-| **Plate review** | Uncertain / unknown plate reads waiting for a human decision, plus searchable recognition history (CSV export) |
-| **Registered vehicles** | Approve, suspend and search regular vehicles (faculty, staff, daily visitors, vendors) |
+| **Overview** | Campus capacity, recognition decisions, hourly activity chart, review queue |
+| **Vehicles inside** | Who is on campus right now; **vehicles that stayed too long** |
+| **Plate review** | Uncertain plate reads waiting for a human; searchable history; CSV export |
+| **Registered vehicles** | Approve students'/faculty/staff/vendor vehicles **once at the start of the year**; they then enter daily without a new request. Suspend or expire any time |
 | **Incidents** | Report → acknowledge → investigate → outcome → resolve |
-| **History** | Past visits and the audit trail |
-| **AI assistant** | Daily briefing and Q&A over authorised aggregate facts only |
-| **Settings** | Vehicle capacity, minimum recognition score, normal / lockdown entry policy |
+| **History** | All old visits and the audit trail |
+| **AI assistant** | An **LLM that queries the database**: *"how many cars arrived between 10:00 and 10:30?"*, daily briefing, unusual-activity notes |
+| **Settings** | Capacity, minimum recognition score, normal / lockdown entry policy, queue settings |
 
-### 5. 🪪 Registered Vehicles
-- Faculty, staff, approved daily visitors and vendors get an expiring registration instead of a new warden request every time.
-- An exact plate match gives entry permission — **inspection is still mandatory**.
-- Suspension or expiry blocks new entry, but a vehicle already inside can still leave.
-
-### 6. 🤖 AI Briefing (optional)
-- Head/admin only. The backend supplies authorised aggregate facts and validates the output; **the AI can never grant a permission**.
+Plus **queue estimates** (how long the queue will take to clear) and **historical arrival frequency** (busiest hours of the last 10–15 hours) so the head can plan guard staffing.
 
 ---
 
-## 🔒 Safety Rules Built Into the Backend
+## 🔒 Rules the Backend Enforces
 
-| Rule | How it's enforced |
+| Rule | How |
 |---|---|
-| Recognition ≠ permission | A plate read never records passage; a human guard always confirms |
-| No guessing | Low-confidence / invalid plates become `HOLD` reads — O/0 and I/1 are never auto-corrected |
-| One plate, one place | A unique occupancy record stops the same plate entering twice at once |
-| Head-count matching | Exit count must equal the saved entry count |
-| Capacity & lockdown | Re-checked on the server at the moment of entry; exits are never blocked |
-| Role-based access | HttpOnly cookie + signed JWT, server-side revocation, salted **scrypt** password hashes |
-| Optimistic locking | Every approval carries a `version`, so two staff members can't overwrite each other |
-| Full audit trail | Approvals, suspensions, policy changes and reviews record the responsible staff account |
+| Recognition is never permission | A plate read never records passage; a guard confirms every entry |
+| No guessing | Low-confidence or invalid plates become `HOLD` reads; O/0 and I/1 are never auto-corrected |
+| Entry needs warden approval | Visitors can't enter without an approved request for **that** plate and date |
+| Exit needs warden verification | The visit must be verified by the warden before exit is allowed |
+| Head-count must match | Exit count has to equal the entry count (HTTP 409 otherwise) |
+| One plate, one place | The same plate can't be inside twice |
+| Inspection is mandatory | Every entry needs a recorded inspection |
+| Capacity / lockdown | Re-checked on the server at entry; exits are never blocked |
+| The AI can't grant anything | LLM only sees authorised aggregate facts and can't approve or change records |
+| Safe auth | HttpOnly cookies, signed JWT, server-side revocation, scrypt password hashes |
+| Concurrency safe | Versioned records, so two staff can't overwrite each other |
+| Audit trail | Every approval, suspension, policy change and review is recorded with the staff account |
 
 ---
 
-## 🏛️ System Architecture
+## 🏛️ Architecture
 
 ```
-┌──────────────────────── Browser (single-page UI) ────────────────────────┐
-│  Visitor · Warden · Guard · Security Head  (vanilla JS, Three.js 3D map)  │
-│  dist/*.js  +  backend/frontend/{backend-ui, head-monitor, live-camera}   │
+┌────────────────────────── Browser (vanilla JS) ──────────────────────────┐
+│ Visitor · Warden · Guard · Security Head   Three.js 3D campus            │
+│ dist/            static pages, 3D map, hostel directory                  │
+│ backend/frontend/ API-connected layers (portals, head sidebar, camera)   │
 └───────────────────────────────┬──────────────────────────────────────────┘
-                                │  REST  /api/v1/…   (cookie + JWT)
+                                │ REST /api/v1/…  (cookie + JWT)
 ┌───────────────────────────────▼──────────────────────────────────────────┐
-│                         FastAPI backend (backend/)                        │
-│  main.py        auth, visits, approvals, incidents, queue, analytics      │
-│  registry.py    registered-vehicle approval, lookup, entry                │
-│  monitoring.py  head overview, occupancy, recognition summary             │
-│  tailgating.py  one-approval-one-vehicle cycles + alerts                  │
-│  anpr.py        audited plate-detection records and human review          │
-│  camera.py      frame → YOLO11 detector → plate crop → EasyOCR            │
-│  ai.py          Groq / local-relay briefing (facts only)                  │
-│  security.py    scrypt, JWT, sessions, role guards                        │
+│ FastAPI backend (backend/)                                               │
+│  main.py        auth, visits, approvals, incidents, queue, analytics     │
+│  registry.py    registered vehicles                                      │
+│  monitoring.py  head overview, occupancy, recognition summary            │
+│  tailgating.py  one-approval-one-vehicle cycles + alerts                 │
+│  anpr.py        audited plate-detection records + human review           │
+│  camera.py      frame → YOLO11 plate detector → crop → EasyOCR           │
+│  ai.py          LLM assistant (Groq) over database facts                 │
+│  security.py    scrypt, JWT, sessions, role guards                       │
 └───────────────┬──────────────────────────────────────────────────────────┘
-                │  SQLAlchemy 2 + Alembic migrations (0001 … 0007)
-                ▼
-          SQLite database  (data/, never committed)
+                ▼  SQLAlchemy 2 + Alembic (migrations 0001–0007)
+          SQLite  (created automatically in data/)
 ```
 
 ---
 
 ## 💻 Tech Stack
 
-| Layer | Technology | Purpose |
-|---|---|---|
-| Frontend | Vanilla JS + CSS | Four role-based portals, no build step |
-| 3D map | Three.js 0.180 + OSM data | Hostel directions and route preview |
-| Backend | FastAPI + Uvicorn | REST API, interactive docs at `/docs` |
-| Database | SQLite + SQLAlchemy 2 + Alembic | Normalised records with versioned migrations |
-| Auth | PyJWT + scrypt | Role-based sessions |
-| Plate detection | Ultralytics YOLO11s | Finds the number plate in a frame |
-| Plate reading | EasyOCR (English) | Reads the cropped plate locally |
-| AI briefing | Groq API *(optional)* | Head-only daily summary / Q&A |
-| Tests | pytest | API, registry, occupancy, tailgating, head-count rules |
+| Layer | Technology |
+|---|---|
+| Frontend | Vanilla JS + CSS (no build step) |
+| 3D navigation | Three.js 0.180 + OpenStreetMap data |
+| Backend | FastAPI + Uvicorn |
+| Database | SQLite, SQLAlchemy 2, Alembic |
+| Auth | PyJWT + scrypt |
+| Plate detection | Ultralytics YOLO11s (`plate-detector.pt`) |
+| Plate reading | EasyOCR English (`ocr/english_g2.pth`) |
+| LLM assistant | Groq API (optional) |
+| Tests | pytest (13 tests) |
 
 ---
 
-## 📁 Repository Structure
+## 📁 Repository Contents
 
 ```
 AEMS/
-├── README.md                    ← You are here
-├── backend/                     ← FastAPI service
-│   ├── main.py                  ← App, auth, visits, approvals, incidents
-│   ├── registry.py              ← Registered vehicles
-│   ├── monitoring.py            ← Security-head overview
-│   ├── tailgating.py            ← Passage count + alerts
-│   ├── anpr.py / camera.py      ← Plate recognition pipeline
-│   ├── ai.py                    ← Optional AI briefing
-│   ├── models.py, schemas.py    ← Database + API models
-│   ├── migrations/              ← Alembic versions 0001–0007
-│   ├── frontend/                ← Backend-connected UI layers
-│   │   ├── backend-ui.js        ← Portals wired to the API
-│   │   ├── head-monitor.js      ← Security-head sidebar + views
-│   │   └── live-camera.js       ← Browser camera + recognise-frame
-│   ├── models/README.md         ← ANPR weight notes (weights not committed)
-│   └── tests/test_backend.py
-├── dist/                        ← Static UI, 3D campus, vendor Three.js
-├── worker/, scripts/, drizzle/  ← Hosted demo variant
-├── monitor_server.py            ← Lightweight static demo server (port 4173)
-├── campus-osm.xml, campus-roads-2025.pdf, CAMPUS_SOURCES.md  ← Map sources
-└── Round_2_Preparation.md
+├── README.md
+├── backend/
+│   ├── main.py, registry.py, monitoring.py, tailgating.py   ← API
+│   ├── anpr.py, camera.py, anpr_adapter.py, plate_reader.py ← plate recognition
+│   ├── ai.py                                                ← LLM assistant
+│   ├── models.py, schemas.py, services.py, security.py      ← data + auth
+│   ├── bootstrap.py                                         ← seeds demo students/wardens/accounts
+│   ├── migrations/                                          ← Alembic 0001–0007
+│   ├── frontend/                                            ← backend-ui.js, head-monitor.js, live-camera.js
+│   ├── models/
+│   │   ├── plate-detector.pt   (YOLO11s number-plate detector)
+│   │   ├── ocr/english_g2.pth  (EasyOCR English recognizer)
+│   │   └── campus-anpr.pt      (CRNN checkpoint, kept for reference — not the active reader)
+│   ├── tests/test_backend.py
+│   ├── requirements.txt, requirements-anpr.txt
+│   └── run.py, start.ps1
+├── dist/              ← web UI, 3D campus (Three.js vendored), hostel directory
+└── tools/             ← optional: regenerate the 3D map data from OpenStreetMap
+    ├── campus-osm.xml, build_campus_data.py, build_real_view.py
 ```
 
 ---
 
-## ⚙️ Quick Start
+## ⚙️ Setup — Replicate the Project
 
 ### Prerequisites
-
 | Item | Requirement |
 |---|---|
-| OS | Windows / macOS / Linux |
-| Python | 3.x with `pip` |
-| Camera ANPR *(optional)* | `backend/requirements-anpr.txt` + model weights |
+| Python | 3.10+ with `pip` |
+| Browser | Chrome / Edge (camera access needs `localhost` or HTTPS) |
+| Webcam | Only for live plate recognition |
+| Groq API key | Only for the LLM assistant (optional) |
 
 ### 1. Clone
-
 ```bash
 git clone https://github.com/pranav2007kumar/AEMS.git
 cd AEMS
 ```
 
-### 2. Install
-
+### 2. Install the web backend
 ```bash
 pip install -r backend/requirements.txt
 ```
 
 ### 3. Run
-
-```powershell
-# Windows PowerShell
-$env:PORT = "4174"; $env:IMPORT_LEGACY = "1"; $env:LOCAL_DEMO_LOGIN = "1"
-python -u backend/run.py
-```
-
 ```bash
 # macOS / Linux
-PORT=4174 IMPORT_LEGACY=1 LOCAL_DEMO_LOGIN=1 python -u backend/run.py
+PYTHONPATH=. PORT=4174 LOCAL_DEMO_LOGIN=1 python -u backend/run.py
 ```
+```powershell
+# Windows PowerShell
+$env:PYTHONPATH="."; $env:PORT="4174"; $env:LOCAL_DEMO_LOGIN="1"
+python -u backend/run.py
+```
+Open **http://127.0.0.1:4174/** (API docs at `/docs`). The database, demo students, wardens and guards are created automatically on first start.
 
-Open **http://127.0.0.1:4174/** — API docs at **http://127.0.0.1:4174/docs**.
+### 4. Try the full flow
+Sign-in for the staff portals (**local demo only**): username `1234`, password `1234`. In the Warden portal pick Menon or Devi.
 
-### 4. Sign in (local demo only)
+1. **Visitor portal**: enter student ID `CB.CSE.DEMO01` (also `CB.ECE.DEMO02`, `CB.AI.DEMO03`). Hostel and warden fill in automatically. Add a vehicle number, e.g. `TN38AB1234`, and submit. **Save the request ID and tracking token.**
+2. **Warden portal**: approve the entry.
+3. **Security portal**: look up `TN38AB1234`, tick the verification and inspection boxes, enter the people count and confirm passage (the **Allow** step).
+4. **Warden portal**: verify the visit and clear the exit.
+5. **Security portal**: switch to *exit*, enter the same people count, record departure.
+6. **Security head**: view occupancy, history, registered vehicles, incidents and settings.
 
-With `LOCAL_DEMO_LOGIN=1` the staff portals accept **`1234` / `1234`** on loopback. This shortcut is rejected in production and for non-loopback requests. Real accounts get generated passwords written to `data/backend-demo-accounts.txt`, which is never committed. Visitors don't need to sign in.
-
-Student IDs to try in the visitor form: `CB.CSE.DEMO01`, `CB.ECE.DEMO02`, `CB.AI.DEMO03`.
-
-### 5. Run the tests
-
+### 5. Optional: live camera plate recognition
 ```bash
-python -m pytest backend/tests
+pip install -r backend/requirements-anpr.txt     # use CPU torch wheels if you have no GPU
+```
+Then start the server with `ANPR_ENABLE_INFERENCE=1`. The weights are already in `backend/models/`. In the guard portal click **Start camera → Recognize current frame**.
+
+### 6. Optional: LLM assistant
+```bash
+export GROQ_API_KEY=your_key      # PowerShell: $env:GROQ_API_KEY="your_key"
+```
+Set it before starting the server. The Security Head → *AI assistant* then answers questions from the database.
+
+### 7. Run the tests
+```bash
+PYTHONPATH=. python -m pytest backend/tests -q
 ```
 
 ### Environment variables
-
 | Variable | Purpose |
 |---|---|
 | `PORT` | Server port (default `4174`) |
-| `DATABASE_URL` | Database location (defaults to local SQLite) |
-| `APP_ENV` | Set `production` to disable demo login and require `JWT_SECRET` |
-| `JWT_SECRET` | Session signing secret (**required in production**) |
-| `GROQ_API_KEY` | Enables the AI briefing (optional) |
-| `ANPR_ENABLE_INFERENCE` | `1` to load the plate detector + OCR |
-| `TEST_PASSWORD` | Fixed password for seeded accounts (testing only) |
+| `LOCAL_DEMO_LOGIN` | `1` allows the `1234/1234` shortcut on loopback only |
+| `ANPR_ENABLE_INFERENCE` | `1` loads YOLO + EasyOCR for live recognition |
+| `GROQ_API_KEY` | Enables the LLM assistant |
+| `APP_ENV` / `JWT_SECRET` | `production` disables demo login and **requires** `JWT_SECRET` |
+| `DATABASE_URL` | Override the default SQLite file |
+| `TEST_PASSWORD` | Fixed password for seeded accounts (testing) |
 
 ---
 
-## 📷 Camera Plate Recognition (optional)
+## 🧠 Plate Recognition Pipeline
 
 ```
-Browser camera ─▶ "Recognize current frame" ─▶ YOLO11s plate detector
-                                                     │
-                                         cropped plate ▼
-                                              EasyOCR (English)
-                                                     │
-                                                     ▼
-                              audited ANPR record  ─▶  guard confirms
+ Camera frame (in memory, never stored)
+        │
+        ▼
+ YOLO11s plate detector ──▶ crop the plate ──▶ EasyOCR (English)
+        │                                          │
+        └──────────────── plate text + confidence ◀┘
+                              │
+                              ▼
+        audited ANPR record  ──▶  guard compares with the approved form
 ```
 
-- Camera starts only when the guard clicks **Start camera**; audio is off; leaving the page releases the tracks.
-- Model weights are **not** in this repo — see [backend/models/README.md](backend/models/README.md). Install `backend/requirements-anpr.txt` and set `ANPR_ENABLE_INFERENCE=1`.
-- Multiple plates or unreadable frames always go to manual review.
+- Several plates in one frame or an unreadable frame always go to manual review.
+- The detector, OCR and form comparison are advisory. **The guard decides.**
+- Details of the supplied checkpoints are in [backend/models/README.md](backend/models/README.md).
 
 ---
 
 ## ⚠️ Honest Limitations
 
-This is a hackathon prototype, and we'd rather say so than overstate it:
-
-- Plate-recognition accuracy has been smoke-tested, **not benchmarked**.
-- Vehicle counting and the gate barrier are **simulated** — no physical sensors or barrier are connected.
-- The demo `1234` login is for local use only.
+- Plate-recognition accuracy has been smoke-tested, **not benchmarked** on a real gate dataset.
+- Vehicle counting and the barrier are **simulated**; no physical sensors or gate hardware are connected.
+- `1234 / 1234` is a local demo shortcut and is rejected in production and for non-loopback requests.
+- The student/warden/hostel directory is **sample data** seeded for the demo.
 - Queue forecasting is a historical hourly baseline, not a trained ML model.
-- Campus map building heights, facades and trees are illustrative; routes are approach previews.
+- Building heights, facades and trees in the 3D map are illustrative; routes are approach previews.
 
 ---
 
-## 🤝 Contributing
+## 🗺️ Map Data Credit
 
-1. Fork the repo
-2. Create a branch: `git checkout -b feat/your-feature`
-3. Add or change an endpoint in `backend/`, with a test in `backend/tests/`
-4. Open a PR describing what changed and why
+Campus geometry © OpenStreetMap contributors (ODbL), stored in `tools/campus-osm.xml` and compiled into `dist/campus-data.json`. Three.js is MIT-licensed (`dist/vendor/THREE-LICENSE.txt`).
 
 ---
 
-## 📄 License
-
-Not yet specified — add a `LICENSE` file before reusing this code.
-
----
-
-*Built with ❤️ for a hackathon — every visit, accounted for.*
+*Entry with permission. Exit with verification.*

@@ -1,6 +1,6 @@
 # Supplied ANPR models
 
-These local weights are excluded from Git.
+These weights are committed to the repository so the project can be reproduced. EasyOCR's `ocr/english_g2.pth` is the standard English recognizer.
 
 | File | Verified role | Checkpoint details |
 | --- | --- | --- |

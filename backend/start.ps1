@@ -1,7 +1,8 @@
+﻿# Start the AEMS backend from anywhere. Run: powershell -File backend/start.ps1
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$pythonRuntime = 'C:/Users/prana/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe'
-$env:PYTHONPATH = "$PSScriptRoot/.deps;$repoRoot"
+$env:PYTHONPATH = $repoRoot
 if (-not $env:PORT) { $env:PORT = '4174' }
+if (-not $env:LOCAL_DEMO_LOGIN) { $env:LOCAL_DEMO_LOGIN = '1' }
 Set-Location -LiteralPath $repoRoot
-& $pythonRuntime -u backend/run.py
+python -u backend/run.py

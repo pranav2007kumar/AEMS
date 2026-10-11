@@ -1,8 +1,8 @@
-from pathlib import Path
+﻿from pathlib import Path
 import xml.etree.ElementTree as ET
 import json,math,heapq
-root=Path('D:/Hackathons/Genesis/amrita-entry')
-r=ET.parse(root/'campus-osm.xml').getroot()
+root=Path(__file__).resolve().parents[1]
+r=ET.parse(root/'tools/campus-osm.xml').getroot()
 nodes={n.get('id'):{'lat':float(n.get('lat')),'lon':float(n.get('lon')),'tags':{t.get('k'):t.get('v') for t in n.findall('tag')}} for n in r.findall('node')}
 ways={w.get('id'):{'id':w.get('id'),'nodes':[n.get('ref') for n in w.findall('nd') if n.get('ref') in nodes],'tags':{t.get('k'):t.get('v') for t in w.findall('tag')}} for w in r.findall('way')}
 gate=nodes['988441542'];lat,lon=gate['lat'],gate['lon'];scale=.2
@@ -46,7 +46,7 @@ for b in buildings:
  if b['kind']=='hostel':
   name='Mythreyi Bhavanam' if b['name']=='Maitheyi Bhavanam' else b['name'];b['name']=name;routes[name]=route(b)
 landmarks=[{'name':n['tags']['name'],'point':xy(i)} for i,n in nodes.items() if n['tags'].get('name') and inside(*xy(i)) and n['tags'].get('name') in ['Natarajar statue','Arjuna Statue','Saraswati Statue','University Clinic','Temple']]
-data={'name':'Amrita Vishwa Vidyapeetham, Coimbatore','origin':{'latitude':lat,'longitude':lon},'metresToWorld':scale,'boundary':boundary,'buildings':buildings,'roads':roads,'areas':areas,'landmarks':landmarks,'routes':routes,'attribution':'© OpenStreetMap contributors, ODbL','source':'https://www.openstreetmap.org/way/128964693','retrieved':'2026-10-10','limitations':'Footprints and roads from OSM. Heights and facade details are illustrative. Visitor access and exact hostel reception entrances need on-site confirmation.'}
+data={'name':'Amrita Vishwa Vidyapeetham, Coimbatore','origin':{'latitude':lat,'longitude':lon},'metresToWorld':scale,'boundary':boundary,'buildings':buildings,'roads':roads,'areas':areas,'landmarks':landmarks,'routes':routes,'attribution':'Â© OpenStreetMap contributors, ODbL','source':'https://www.openstreetmap.org/way/128964693','retrieved':'2026-10-10','limitations':'Footprints and roads from OSM. Heights and facade details are illustrative. Visitor access and exact hostel reception entrances need on-site confirmation.'}
 (root/'dist/campus-data.json').write_text(json.dumps(data,separators=(',',':')),encoding='utf-8')
 print('Bounds',min(p[0] for p in boundary),max(p[0] for p in boundary),min(p[1] for p in boundary),max(p[1] for p in boundary))
 print('Origin',data['origin'],'Buildings',len(buildings),'Roads',len(roads),'Routes',list(routes))
